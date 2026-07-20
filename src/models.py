@@ -6,6 +6,7 @@
 #   2026-07-20 | 최초작성 | Weather/Country/Ip 3종 Pydantic 모델 및 파서 작성
 #   2026-07-20 | 린트대응 | zip(strict=True) 명시, IpRecord countryCode 정규화 검증기 추가
 #   2026-07-20 | 린트대응 | ruff I001 import 정렬 자동 정리
+#   2026-07-20 | 확장성   | ApiSource 레지스트리(SOURCES) 도입 — API 추가를 한 곳으로 모음
 # ----------------------------------------------------------------------------
 """수집한 JSON에서 필요한 필드만 추출하여 타입·범위를 검증하는 Pydantic 모델 모음.
 
@@ -16,6 +17,10 @@
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -124,3 +129,27 @@ def parse_ip(payload: dict) -> IpRecord:
         timezone=payload["timezone"],
         isp=payload["isp"],
     )
+
+
+# ----------------------------------------------------------------------------
+# API 소스 레지스트리
+#   - 각 API를 "이름 + 파서" 를 묶은 ApiSource 객체로 표현한다.
+#   - 파서는 원본 JSON을 '레코드 리스트' 로 통일해서 반환한다.
+#       weather : 여러 레코드(시각 단위) -> 그대로 리스트
+#       country / ip : 단일 레코드 -> 1개짜리 리스트로 감싼다
+#   - 파이프라인은 이 리스트를 for 로 순회하므로, API가 늘어나도
+#     아래 SOURCES 에 한 줄만 추가하면 된다(중복 if 분기 불필요).
+# ----------------------------------------------------------------------------
+@dataclass(frozen=True)
+class ApiSource:
+    """수집 대상 API 하나: 이름과 '원본 JSON -> 레코드 리스트' 파서를 묶는다."""
+
+    name: str
+    parse: Callable[[dict], list[BaseModel]]
+
+
+SOURCES: list[ApiSource] = [
+    ApiSource("weather", parse_weather),
+    ApiSource("country", lambda payload: [parse_country(payload)]),
+    ApiSource("ip", lambda payload: [parse_ip(payload)]),
+]

@@ -6,6 +6,7 @@
 #   2026-07-20 | 최초작성 | collector/models/storage 를 엮는 main 파이프라인 작성
 #   2026-07-20 | 내결함성 | 수집 단계에서 누락된 API 를 검증 전에 명확히 로그로 구분
 #   2026-07-20 | 린트대응 | ruff I001 import 정렬 자동 정리
+#   2026-07-20 | 확장성   | validate() 의 API별 반복 if 를 SOURCES 순회 for 루프로 통합
 # ----------------------------------------------------------------------------
 """데이터 미니 수집 파이프라인 진입점.
 
@@ -19,53 +20,40 @@
 """
 
 from __future__ import annotations
+
 import asyncio
+
 import pandas as pd
 from pydantic import ValidationError
+
 from src import storage
 from src.collector import collect_all
-from src.models import parse_country, parse_ip, parse_weather
+from src.models import SOURCES
 
 
 def validate(raw: dict[str, dict]) -> dict[str, pd.DataFrame]:
     """원본 JSON 묶음을 검증하여 {이름: DataFrame} 으로 변환한다.
     개별 API 검증이 실패하면 예외를 잡아 로그를 남기고 그 API 만 제외한다.
+
+    API별로 분기하지 않고 models.SOURCES(각 API를 표현한 ApiSource 목록)를
+    순회한다. API 가 늘어나도 SOURCES 에 한 줄 추가하면 되고, 이 함수는
+    수정할 필요가 없다.
     """
     frames: dict[str, pd.DataFrame] = {}
 
-    def check(name: str) -> bool:
-        """수집 단계에서 빠진 API 는 검증을 건너뛰고 명확히 로그를 남긴다."""
-        if name not in raw:
-            print(f"  [검증 생략] {name} : 수집 단계에서 누락됨")
-            return False
-        return True
+    for source in SOURCES:
+        # 수집 단계에서 빠진 API 는 검증을 건너뛰고 명확히 로그를 남긴다.
+        if source.name not in raw:
+            print(f"  [검증 생략] {source.name} : 수집 단계에서 누락됨")
+            continue
 
-    # --- weather : 시각 단위 레코드 리스트 -> DataFrame ---
-    if check("weather"):
         try:
-            records = parse_weather(raw["weather"])
-            frames["weather"] = pd.DataFrame([r.model_dump() for r in records])
-            print(f"  [검증] weather : {len(records)}건 통과")
+            # 파서는 레코드 리스트를 돌려주므로 weather(다건)·country/ip(1건)를 동일하게 처리한다.
+            records = source.parse(raw[source.name])
+            frames[source.name] = pd.DataFrame([r.model_dump() for r in records])
+            print(f"  [검증] {source.name} : {len(records)}건 통과")
         except (ValidationError, KeyError, ValueError) as exc:
-            print(f"  [검증 실패] weather : {exc}")
-
-    # --- country : 단일 레코드 -> 1행 DataFrame ---
-    if check("country"):
-        try:
-            record = parse_country(raw["country"])
-            frames["country"] = pd.DataFrame([record.model_dump()])
-            print("  [검증] country : 1건 통과")
-        except (ValidationError, KeyError, ValueError) as exc:
-            print(f"  [검증 실패] country : {exc}")
-
-    # --- ip : 단일 레코드 -> 1행 DataFrame ---
-    if check("ip"):
-        try:
-            record = parse_ip(raw["ip"])
-            frames["ip"] = pd.DataFrame([record.model_dump()])
-            print("  [검증] ip : 1건 통과")
-        except (ValidationError, KeyError, ValueError) as exc:
-            print(f"  [검증 실패] ip : {exc}")
+            print(f"  [검증 실패] {source.name} : {exc}")
 
     return frames
 
