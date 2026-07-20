@@ -19,3 +19,6 @@ __pycache__/
 
 # Claude Code 로컬 설정
 .claude/settings.local.json
+
+# CLAUDE.md (프로젝트 지침 — 버전관리 제외)
+CLAUDE.md
