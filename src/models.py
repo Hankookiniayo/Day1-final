@@ -2,11 +2,10 @@
 # 작성자   : 광주캠퍼스_2반_정구현
 # 작성목적 : 3개 API 응답을 검증하기 위한 Pydantic v2 모델 정의 (타입·범위 검증)
 # 작성일   : 2026-07-20
-#
-#
 # 변경사항 내역 (날짜, 변경목적, 변경내용 순으로 기입)
 #   2026-07-20 | 최초작성 | Weather/Country/Ip 3종 Pydantic 모델 및 파서 작성
 #   2026-07-20 | 린트대응 | zip(strict=True) 명시, IpRecord countryCode 정규화 검증기 추가
+#   2026-07-20 | 린트대응 | ruff I001 import 정렬 자동 정리
 # ----------------------------------------------------------------------------
 """수집한 JSON에서 필요한 필드만 추출하여 타입·범위를 검증하는 Pydantic 모델 모음.
 
@@ -17,7 +16,6 @@
 """
 
 from __future__ import annotations
-
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -72,7 +70,6 @@ class CountryRecord(BaseModel):
 
 def parse_country(payload: dict) -> CountryRecord:
     """countries.dev 원본 JSON을 CountryRecord 로 변환한다.
-
     응답 키(populationDensity)를 모델 필드(population_density)로 매핑한다.
     """
     return CountryRecord(
@@ -111,7 +108,6 @@ class IpRecord(BaseModel):
 
 def parse_ip(payload: dict) -> IpRecord:
     """ip-api 원본 JSON을 IpRecord 로 변환한다.
-
     status 필드가 'success' 가 아니면 조회 실패로 보고 예외를 발생시킨다.
     """
     status = payload.get("status")
